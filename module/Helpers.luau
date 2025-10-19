@@ -1,6 +1,6 @@
 local Helpers = {}
 
-local function Helpers.safeLoad(url)
+function Helpers.safeLoad(url)
     local ok, result = pcall(function()
         local body = game:HttpGet(url)
         local fn, err = loadstring(body)
@@ -21,7 +21,7 @@ function Helpers.getHumanoidRoot(player)
     return nil
 end
 
-local function Helpers.safeFind(obj, path)
+function Helpers.safeFind(obj, path)
     local current = obj
     for _, name in ipairs(path) do
         current = current:FindFirstChild(name)
@@ -30,26 +30,25 @@ local function Helpers.safeFind(obj, path)
     return current
 end
 
-local function Helpers.parsePrice(text)
-	if not text or text == "" then return 0 end
+function Helpers.parsePrice(text)
+    if not text or text == "" then return 0 end
 
-	text = text:gsub("%$", ""):gsub(",", ""):gsub("%s+", "")
+    text = text:gsub("[%$%,]", ""):gsub("%s+", "")
+    local num, suffix = text:match("([%d%.]+)([KMBkmb]?)")
 
-	local num, suffix = text:match("([%d%.]+)([KMBkmb]?)")
+    num = tonumber(num)
+    if not num then return 0 end
 
-	num = tonumber(num)
-	if not num then return 0 end
+    suffix = suffix:upper()
+    if suffix == "K" then
+        num = num * 1_000
+    elseif suffix == "M" then
+        num = num * 1_000_000
+    elseif suffix == "B" then
+        num = num * 1_000_000_000
+    end
 
-	suffix = suffix:upper()
-	if suffix == "K" then
-		num = num * 1_000
-	elseif suffix == "M" then
-		num = num * 1_000_000
-	elseif suffix == "B" then
-		num = num * 1_000_000_000
-	end
-
-	return math.floor(num)
+    return math.floor(num)
 end
 
 return Helpers
