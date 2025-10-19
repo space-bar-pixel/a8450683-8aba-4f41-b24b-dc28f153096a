@@ -89,7 +89,7 @@ mainSecLeft1:Toggle({
 -----------------------------------------------------------
 -- SETTING TAB
 -----------------------------------------------------------
-Menu.tabs.setting.settingSec2:Keybind({
+settingSec2:Keybind({
 	Name = "Set Key Bind",
 	onBinded = function(bind)
 		Menu.system.keyBind = bind or Enum.KeyCode.K
@@ -101,7 +101,7 @@ Menu.tabs.setting.settingSec2:Keybind({
 	end,
 }, "ResetKeyBind")
 
-Menu.tabs.setting.settingSec2:Button({
+settingSec2:Button({
 	Name = "Kill Menu",
 	Callback = function()
 		Window:Unload()
