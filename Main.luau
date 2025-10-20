@@ -60,11 +60,10 @@ Setting:InsertConfigSection({ Side = "Left" })
 local settingSec2 = Setting:Section({ Side = "Right" })
 
 local player = game:GetService("Players").LocalPlayer
+local humanoidRootPart = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 
 local VirtualUser = game:GetService("VirtualUser")
 local UserInputService = game:GetService("UserInputService")
-
-local humanoidRootPart = nil
 
 local menuVisible = true
 
@@ -112,71 +111,87 @@ mainSecLeft1:Toggle({
 	Default = false,
 	Callback = function(state)
 		AutoBuyEnabled = state
+		print("[Debug] AutoBuyEnabled =", state)
 
 		if state then
 			if not MinInputPath or not MaxInputPath then
-				print("Please set both Min and Max Value Paths before enabling Auto Buy Animals.")
+				print("[Debug] Please set both Min and Max Value Paths before enabling Auto Buy Animals.")
 				AutoBuyEnabled = false
 				return
 			end
 
 			task.spawn(function()
 				while AutoBuyEnabled do
-					if not player.Character or not HumanoidRootPart then
+					if not player.Character or not humanoidRootPart then
+						print("[Debug] Waiting for character...")
 						task.wait(0.05)
 						continue
 					end
 
 					local animals = GetAnimals()
 					table.sort(animals, function(a, b) return a.Price > b.Price end)
+					print(string.format("[Debug] Found %d animals", #animals))
 
 					for _, a in ipairs(animals) do
-						if not AutoBuyEnabled then break end
+                        if not AutoBuyEnabled then break end
 
-						local price = a.Price or 0
-						local minPrice = tonumber(MinInputPath)
-						local maxPrice = tonumber(MaxInputPath)
-						if price < minPrice or price > maxPrice then continue end
+                        local price = a.Price or 0
+                        local minPrice = tonumber(MinInputPath)
+                        local maxPrice = tonumber(MaxInputPath)
+                        if price < minPrice or price > maxPrice then
+                            print(string.format("[Debug] Skipping %s, price %d outside range [%d,%d]", a.Object.Name, price, minPrice, maxPrice))
+                            continue
+                        end
 
-						local animalObj = a.Object
-						if not animalObj or not animalObj.Parent then continue end
+                        local animalObj = a.Object
+                        local targetPart = animalObj:FindFirstChild("Part") or animalObj.PrimaryPart
+                        local proximityPrompt = Helpers.safeFind(animalObj, {"Part", "PromptAttachment", "ProximityPrompt"})
+                        if not targetPart or not proximityPrompt then continue end
 
-						local targetPart = animalObj:FindFirstChild("Part") or animalObj.PrimaryPart
-						if not targetPart then continue end
+                        -- Live movement: keep updating target until in range
+                        -- Instead of Lerp, use simulateWalkTo for live movement
+                        repeat
+                            if not AutoBuyEnabled then break end
+                            if not humanoidRootPart or not humanoidRootPart.Parent then task.wait(0.05); continue end
 
-						local proximityPrompt = Helpers.safeFind(animalObj, {"Part", "PromptAttachment", "ProximityPrompt"})
-						if not proximityPrompt then continue end
+                            local targetPos = targetPart.Position
+                            local dist = (humanoidRootPart.Position - targetPos).Magnitude
 
-						local follow = Movement.followTarget(player, targetPart, {
-							RefreshRate = 0.02,
-							StopDistance = 4,      -- Stop 4 studs away
-							MaxSpeed = 20           -- Optional: adjust humanoid speed
-						})
+                            if dist <= 3 then
+                                break -- reached target
+                            end
 
-						repeat task.wait(0.02) 
-						until (HumanoidRootPart.Position - targetPart.Position).Magnitude <= 4 or not AutoBuyEnabled
+                            -- Move toward live target with simulateWalkTo
+                            Movement.simulateWalkTo(player, targetPos, {
+                                Speed = 16,
+                                ReachedDist = 0.5,
+                                Timeout = 0.5 -- short timeout for dynamic updating
+                            })
 
-						if proximityPrompt.Parent and AutoBuyEnabled then
-							proximityPrompt:InputHoldBegin()
-							task.wait(0.5)
-							proximityPrompt:InputHoldEnd()
-							print("🛒 Bought:", animalObj.Name, "for", price)
-						end
+                            task.wait(0.05)
+                        until (humanoidRootPart.Position - targetPart.Position).Magnitude <= 3
 
-						if follow and follow.stop then follow.stop() end
+                        -- Trigger ProximityPrompt when in range
+                        if proximityPrompt.Parent and AutoBuyEnabled then
+                            print("[Debug] Buying:", animalObj.Name, "for", price)
+                            proximityPrompt:InputHoldBegin()
+                            task.wait(0.5)
+                            proximityPrompt:InputHoldEnd()
+                        end
 
-						task.wait(0.05) -- tiny delay before next pet
-					end
+                        task.wait(0.05)
+                    end
 
-					task.wait(0.1) -- faster loop, real-time updates
+
+					task.wait(0.1)
 				end
 			end)
 		else
 			AutoBuyEnabled = false
+			print("[Debug] Auto Buy Animals: Disabled")
 		end
 	end,
 }, "AutoBuyAnimals")
-
 
 -----------------------------------------------------------
 -- SETTING TAB
