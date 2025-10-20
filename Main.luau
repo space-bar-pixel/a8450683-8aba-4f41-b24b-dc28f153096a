@@ -123,12 +123,11 @@ mainSecLeft1:Toggle({
 			task.spawn(function()
 				while AutoBuyEnabled do
 					if not player.Character or not HumanoidRootPart then
-						task.wait(0.5)
+						task.wait(0.05)
 						continue
 					end
 
 					local animals = GetAnimals()
-					-- Sort by price descending
 					table.sort(animals, function(a, b) return a.Price > b.Price end)
 
 					for _, a in ipairs(animals) do
@@ -137,10 +136,7 @@ mainSecLeft1:Toggle({
 						local price = a.Price or 0
 						local minPrice = tonumber(MinInputPath)
 						local maxPrice = tonumber(MaxInputPath)
-
-						if price < minPrice or price > maxPrice then
-							continue
-						end
+						if price < minPrice or price > maxPrice then continue end
 
 						local animalObj = a.Object
 						if not animalObj or not animalObj.Parent then continue end
@@ -151,38 +147,36 @@ mainSecLeft1:Toggle({
 						local proximityPrompt = Helpers.safeFind(animalObj, {"Part", "PromptAttachment", "ProximityPrompt"})
 						if not proximityPrompt then continue end
 
-						-- FOLLOW TARGET LIVE
 						local follow = Movement.followTarget(player, targetPart, {
-							RefreshRate = 0.02,   -- fast updates
-							Smoothness = 0.35,    -- smooth movement
+							RefreshRate = 0.02,
+							StopDistance = 4,      -- Stop 4 studs away
+							MaxSpeed = 20           -- Optional: adjust humanoid speed
 						})
 
-						-- Wait until we're close enough to trigger prompt
-						repeat task.wait(0.05) until (HumanoidRootPart.Position - targetPart.Position).Magnitude <= 4 or not AutoBuyEnabled
+						repeat task.wait(0.02) 
+						until (HumanoidRootPart.Position - targetPart.Position).Magnitude <= 4 or not AutoBuyEnabled
 
-						-- Trigger the ProximityPrompt
-						if proximityPrompt.Parent then
+						if proximityPrompt.Parent and AutoBuyEnabled then
 							proximityPrompt:InputHoldBegin()
 							task.wait(0.5)
 							proximityPrompt:InputHoldEnd()
 							print("🛒 Bought:", animalObj.Name, "for", price)
 						end
 
-						-- Stop following
 						if follow and follow.stop then follow.stop() end
 
-						task.wait(0.1) -- small delay before next pet
+						task.wait(0.05) -- tiny delay before next pet
 					end
 
-					task.wait(0.2) -- main loop delay
+					task.wait(0.1) -- faster loop, real-time updates
 				end
 			end)
 		else
 			AutoBuyEnabled = false
-			print("Auto Buy Animals: Disabled")
 		end
 	end,
 }, "AutoBuyAnimals")
+
 
 -----------------------------------------------------------
 -- SETTING TAB

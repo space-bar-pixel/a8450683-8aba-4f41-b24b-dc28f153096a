@@ -51,10 +51,11 @@ function Movement.followTarget(player, target, opts)
     if not target or not target:IsA("BasePart") then return false, "invalid target" end
 
     opts = opts or {}
-    local refreshRate = opts.RefreshRate or 0.05 -- how often to update (lower = faster)
+    local refreshRate = opts.RefreshRate or 0.05 -- how often to update
     local distanceStop = opts.StopDistance or 0
-    local smoothness = opts.Smoothness or 0.35 -- 0.2-0.5 feels natural
     local maxSpeed = opts.MaxSpeed or 16 -- humanoid WalkSpeed
+
+    humanoid.WalkSpeed = maxSpeed
 
     local alive = true
     task.spawn(function()
@@ -64,13 +65,8 @@ function Movement.followTarget(player, target, opts)
                 break
             end
 
-            -- live direction toward moving target
-            local targetPos = target.Position + Vector3.new(0, 2, 0)
-            local moveDir = (targetPos - hrp.Position)
-            local step = moveDir * smoothness
-
-            -- update position gradually (no teleport spike)
-            hrp.CFrame = CFrame.new(hrp.Position + step, targetPos)
+            -- Tell humanoid to move naturally
+            humanoid:MoveTo(target.Position + Vector3.new(0, 2, 0))
 
             task.wait(refreshRate)
         end
@@ -80,6 +76,7 @@ function Movement.followTarget(player, target, opts)
         stop = function() alive = false end
     }
 end
+
 
 -- Simulated walking: set a path or move in small increments while playing with humanoid WalkSpeed.
 -- This is naive and client-side only; server should validate movement in authoritative games.
