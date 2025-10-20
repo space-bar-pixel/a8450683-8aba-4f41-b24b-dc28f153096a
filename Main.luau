@@ -161,14 +161,14 @@ mainSecLeft1:Toggle({
 								local ok, err = Teleport(a.Object)
 								
 								if ok then
-									print("Bought:", a.Object.Name, price)
+                                    proximityPrompt:InputHoldBegin()
+                                    task.wait(0.5)
+                                    proximityPrompt:InputHoldEnd()
+									print("🛒 Bought:", a.Object.Name, "for", price)
 								else
 									print("Could not buy:", a.Object.Name, "reason:", err)
 									task.wait(0.5)
 								end
-								task.wait(2)
-								pcall(fireproximityprompt, proximityPrompt)
-									print("🛒 Bought:", a.Object.Name, "for", price)
 							end
 						end
 					end
