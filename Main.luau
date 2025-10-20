@@ -65,23 +65,8 @@ local VirtualUser = game:GetService("VirtualUser")
 local UserInputService = game:GetService("UserInputService")
 
 local humanoidRootPart = nil
+
 local menuVisible = true
-
-local function Teleport(animalObj)
-	if not animalObj then return false end
-	local targetPart = animalObj:FindFirstChild("Part") or animalObj.PrimaryPart
-	if not targetPart then return false, "no target part" end
-
-	local hrp = Helpers.getHumanoidRoot(player)
-	if not hrp then return false, "no hrp" end
-
-	local targetCF = targetPart.CFrame + Vector3.new(0, 5, 0)
-
-	local ok, err = Movement.simulateWalkTo(player, targetCF.Position)
-	if not ok then
-		Movement.lerpTo(hrp, targetCF, {Duration = 0.8, Steps = 70})
-	end
-end
 
 local function GetAnimals()
 	local foundAnimal = {}
@@ -127,7 +112,6 @@ mainSecLeft1:Toggle({
 	Default = false,
 	Callback = function(state)
 		AutoBuyEnabled = state
-		local player = game.Players.LocalPlayer
 
 		if state then
 			if not MinInputPath or not MaxInputPath then
@@ -138,45 +122,64 @@ mainSecLeft1:Toggle({
 
 			task.spawn(function()
 				while AutoBuyEnabled do
-					local humanoidRootPart = Helpers.getHumanoidRoot(player)
-					if not humanoidRootPart then
-						task.wait(1)
+					if not player.Character or not HumanoidRootPart then
+						task.wait(0.5)
 						continue
 					end
 
 					local animals = GetAnimals()
-					table.sort(animals, function(a,b) return a.Price > b.Price end)
-					
+					-- Sort by price descending
+					table.sort(animals, function(a, b) return a.Price > b.Price end)
+
 					for _, a in ipairs(animals) do
 						if not AutoBuyEnabled then break end
-						local price = a.Price or 0
 
+						local price = a.Price or 0
 						local minPrice = tonumber(MinInputPath)
 						local maxPrice = tonumber(MaxInputPath)
 
-						if price >= minPrice and price <= maxPrice then
-							local proximityPrompt = Helpers.safeFind(a.Object, {"Part", "PromptAttachment", "ProximityPrompt"})
-							local targetPart = a.Object:FindFirstChild("Part") or a.Object.PrimaryPart
-							if proximityPrompt and targetPart then
-								local ok, err = Teleport(a.Object)
-								
-								if ok then
-                                    proximityPrompt:InputHoldBegin()
-                                    task.wait(0.5)
-                                    proximityPrompt:InputHoldEnd()
-									print("🛒 Bought:", a.Object.Name, "for", price)
-								else
-									print("Could not buy:", a.Object.Name, "reason:", err)
-									task.wait(0.5)
-								end
-							end
+						if price < minPrice or price > maxPrice then
+							continue
 						end
+
+						local animalObj = a.Object
+						if not animalObj or not animalObj.Parent then continue end
+
+						local targetPart = animalObj:FindFirstChild("Part") or animalObj.PrimaryPart
+						if not targetPart then continue end
+
+						local proximityPrompt = Helpers.safeFind(animalObj, {"Part", "PromptAttachment", "ProximityPrompt"})
+						if not proximityPrompt then continue end
+
+						-- FOLLOW TARGET LIVE
+						local follow = Movement.followTarget(player, targetPart, {
+							RefreshRate = 0.02,   -- fast updates
+							Smoothness = 0.35,    -- smooth movement
+						})
+
+						-- Wait until we're close enough to trigger prompt
+						repeat task.wait(0.05) until (HumanoidRootPart.Position - targetPart.Position).Magnitude <= 4 or not AutoBuyEnabled
+
+						-- Trigger the ProximityPrompt
+						if proximityPrompt.Parent then
+							proximityPrompt:InputHoldBegin()
+							task.wait(0.5)
+							proximityPrompt:InputHoldEnd()
+							print("🛒 Bought:", animalObj.Name, "for", price)
+						end
+
+						-- Stop following
+						if follow and follow.stop then follow.stop() end
+
+						task.wait(0.1) -- small delay before next pet
 					end
-					task.wait(2)
+
+					task.wait(0.2) -- main loop delay
 				end
 			end)
 		else
 			AutoBuyEnabled = false
+			print("Auto Buy Animals: Disabled")
 		end
 	end,
 }, "AutoBuyAnimals")

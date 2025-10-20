@@ -41,6 +41,46 @@ function Movement.lerpTo(hrp, targetCFrame, opts)
     return true
 end
 
+-- Smooth, fast, anti-cheat-safe tracking of a moving target.
+-- opts = {RefreshRate = 0.05, StopDistance = 5, Smoothness = 0.35, MaxSpeed = 25}
+function Movement.followTarget(player, target, opts)
+    if not player or not player.Character then return false, "invalid player" end
+    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+    if not hrp or not humanoid then return false, "missing character parts" end
+    if not target or not target:IsA("BasePart") then return false, "invalid target" end
+
+    opts = opts or {}
+    local refreshRate = opts.RefreshRate or 0.05 -- how often to update (lower = faster)
+    local distanceStop = opts.StopDistance or 0
+    local smoothness = opts.Smoothness or 0.35 -- 0.2-0.5 feels natural
+    local maxSpeed = opts.MaxSpeed or 16 -- humanoid WalkSpeed
+
+    local alive = true
+    task.spawn(function()
+        while alive and player.Character and target and target.Parent do
+            local dist = (hrp.Position - target.Position).Magnitude
+            if dist <= distanceStop then
+                break
+            end
+
+            -- live direction toward moving target
+            local targetPos = target.Position + Vector3.new(0, 2, 0)
+            local moveDir = (targetPos - hrp.Position)
+            local step = moveDir * smoothness
+
+            -- update position gradually (no teleport spike)
+            hrp.CFrame = CFrame.new(hrp.Position + step, targetPos)
+
+            task.wait(refreshRate)
+        end
+    end)
+
+    return {
+        stop = function() alive = false end
+    }
+end
+
 -- Simulated walking: set a path or move in small increments while playing with humanoid WalkSpeed.
 -- This is naive and client-side only; server should validate movement in authoritative games.
 -- opts = {Speed = 16, Step = 0.5}
