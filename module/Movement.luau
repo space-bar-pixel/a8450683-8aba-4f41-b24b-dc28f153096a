@@ -1,13 +1,10 @@
 -- Modules/Movement.lua
--- Provides safe, modular movement helpers for smooth, natural motion.
--- NOTE: This is for legitimate UX only. Do NOT use to bypass server rules.
 
 local Movement = {}
 
 local TweenService = game:GetService("TweenService")
 local PathfindingService = game:GetService("PathfindingService")
 
--- Basic tween move to a CFrame target using a part reference (HumanoidRootPart)
 -- opts = {Time = number, EasingStyle = Enum.EasingStyle, EasingDirection = Enum.EasingDirection}
 function Movement.tweenTo(hrp, targetCFrame, opts)
 	if not hrp or not hrp:IsA("BasePart") then return false, "invalid hrp" end
@@ -24,7 +21,6 @@ function Movement.tweenTo(hrp, targetCFrame, opts)
 	return success, err
 end
 
--- Lerp movement: moves in small steps over duration (useful if you want fine control)
 -- opts = {Duration = 0.6, Steps = 30}
 function Movement.lerpTo(hrp, targetCFrame, opts)
 	if not hrp or not hrp:IsA("BasePart") then return false, "invalid hrp" end
@@ -41,9 +37,6 @@ function Movement.lerpTo(hrp, targetCFrame, opts)
 	return true
 end
 
--- Simulated walking: moves to a target while dynamically following it
--- targetPosition can be Vector3 or function returning Vector3 for moving targets
--- opts = {Speed = 16, ReachedDist = 4, Timeout = 10, FollowThreshold = 2}
 function Movement.simulateWalkTo(player, targetPosition, opts)
 	if not player or not player.Character then 
 		return false 
@@ -76,10 +69,8 @@ function Movement.simulateWalkTo(player, targetPosition, opts)
 			break
 		end
 
-		-- Issue MoveTo to humanoid (walk animation will play)
 		humanoid:MoveTo(targetPos)
 
-		-- Wait a short time, then re-issue MoveTo for moving target
 		task.wait(updateRate)
 	end
 
@@ -88,4 +79,3 @@ end
 
 
 return Movement
--- End of Modules/Movement.lua

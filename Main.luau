@@ -49,10 +49,10 @@ local Window = MacLib:Window({
 })
 
 local BuildFolderTree = MacLib:SetFolder("PizzaHub")
-
 local MainGroup = Window:TabGroup()
 local mainTab = MainGroup:Tab({ Name = "Main", Image = "" })
 local mainSecLeft1 = mainTab:Section({ Side = "Left" })
+local mainSecRight1 = mainTab:Section({ Side = "Right" })
 
 local SettingGroup = Window:TabGroup()
 local Setting = SettingGroup:Tab({ Name = "Setting", Image = "" })
@@ -111,75 +111,106 @@ mainSecLeft1:Toggle({
 	Default = false,
 	Callback = function(state)
 		AutoBuyEnabled = state
+		local AlreadyBoughtPets = {}
 
-		if state then
-			if not MinInputPath or not MaxInputPath then
-				AutoBuyEnabled = false
-				return
-			end
-
-			task.spawn(function()
-				while AutoBuyEnabled do
-					if not player.Character or not humanoidRootPart or not humanoidRootPart.Parent then
-						task.wait(0.1)
-						continue
-					end
-
-					local animals = GetAnimals()
-					if #animals == 0 then
-						task.wait(0.5)
-						continue
-					end
-
-					table.sort(animals, function(a, b)
-						return (a.Price or 0) > (b.Price or 0)
-					end)
-
-					for _, a in ipairs(animals) do
-						if not AutoBuyEnabled then break end
-
-						local price = a.Price or 0
-						local minPrice = tonumber(MinInputPath)
-						local maxPrice = tonumber(MaxInputPath)
-
-						if price < minPrice or price > maxPrice then
-							continue
-						end
-
-						local obj = a.Object
-						if not obj or not obj.Parent then continue end
-
-						local targetPart = obj:FindFirstChild("Part") or obj.PrimaryPart
-						if not targetPart then continue end
-
-						local proximityPrompt = Helpers.safeFind(obj, {"Part", "PromptAttachment", "ProximityPrompt"})
-						if not proximityPrompt then continue end
-
-						-- Walk toward moving target with animations
-						local reached = Movement.simulateWalkTo(player, function()
-							return targetPart.Position
-						end, {
-							Speed = 16,
-							ReachedDist = 3,
-							Timeout = 30,
-							UpdateRate = 0.05 -- smoother follow
-						})
-
-						if reached and proximityPrompt.Parent and AutoBuyEnabled then
-							proximityPrompt:InputHoldBegin()
-							task.wait(0.5)
-							proximityPrompt:InputHoldEnd()
-						end
-
-						task.wait(0.05)
-					end
-
-					task.wait(0.1)
-				end
-			end)
+		if not state or not MinInputPath or not MaxInputPath then
+			AutoBuyEnabled = false
+			return
 		end
+
+		task.spawn(function()
+			while AutoBuyEnabled do
+				local char = player.Character
+				local hrp = humanoidRootPart
+				if not char or not hrp or not hrp.Parent then
+					task.wait(0.1)
+					continue
+				end
+
+				local animals = GetAnimals()
+				if #animals == 0 then
+					task.wait(0.5)
+					continue
+				end
+
+				table.sort(animals, function(a,b) return (a.Price or 0) > (b.Price or 0) end)
+
+				for _, a in ipairs(animals) do
+					if not AutoBuyEnabled then break end
+
+					local obj, price = a.Object, a.Price or 0
+					if not obj or not obj.Parent or AlreadyBoughtPets[obj.Name] then continue end
+
+					local minPrice, maxPrice = tonumber(MinInputPath), tonumber(MaxInputPath)
+					if price < minPrice or price > maxPrice then continue end
+
+					local targetPart = obj:FindFirstChild("Part") or obj.PrimaryPart
+					local proximityPrompt = Helpers.safeFind(obj, {"Part","PromptAttachment","ProximityPrompt"})
+					if not targetPart or not proximityPrompt then continue end
+
+					if Movement.simulateWalkTo(player, function() return targetPart.Position end, {
+						Speed = 16, ReachedDist = 6, Timeout = 30, UpdateRate = 0.05
+						}) and proximityPrompt.Parent and AutoBuyEnabled then
+						proximityPrompt:InputHoldBegin()
+						task.wait(0.5)
+						proximityPrompt:InputHoldEnd()
+						AlreadyBoughtPets[obj.Name] = true
+					end
+
+					task.wait(0.05)
+				end
+
+				task.wait(0.1)
+			end
+		end)
 	end,
 }, "AutoBuyAnimals")
+
+
+local AutoCollectEnabled = false
+
+local function getOwnPlot()
+	local targetText = player.Name .. "s Base"
+	for _, plot in pairs(workspace.Plots:GetChildren()) do
+		local label = Helpers.safeFind(plot, {"PlotSign", "SurfaceGui", "Frame", "TextLabel"})
+		if label and label.Text == targetText then print("plotID: " .. plot.Name) return plot end
+	end
+end
+
+mainSecRight1:Toggle({
+	Name = "Auto Collect Cash",
+	Default = false,
+	Callback = function(state)
+		AutoCollectEnabled = state
+		if not state then return end
+
+		task.spawn(function()
+			while AutoCollectEnabled do
+				local plot = getOwnPlot()
+				if plot then
+					local hitboxes = {}
+					for _, podium in pairs(Helpers.safeFind(plot, {"AnimalPodiums"}):GetChildren()) do
+						local hitbox = Helpers.safeFind(podium, {"Claim", "Hitbox"})
+						if hitbox and hitbox:IsA("BasePart") then
+							table.insert(hitboxes, hitbox)
+						end
+					end
+					
+					for _, h in ipairs(hitboxes) do
+						h.Size = Vector3.new(1024, 150, 900)
+					end
+
+					task.wait(5)
+
+					for _, h in ipairs(hitboxes) do
+						h.Size = Vector3.new(3, 8, 5)
+					end
+				end
+				task.wait(2)
+			end
+		end)
+	end,
+})
 
 -----------------------------------------------------------
 -- SETTING TAB
