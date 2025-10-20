@@ -79,23 +79,101 @@ local function GetAnimals()
     return foundAnimal
 end
 
+local AutoBuyEnabled = false
+local MinInputPath, MaxInputPath = nil, nil
+
+mainSecLeft1:Input({
+    Name = "Min Value Path",
+    Default = "",
+    Placeholder = "Minimum price (e.g. 10000)",
+    AcceptedCharacters = "Numeric",
+    Callback = function(value)
+        MinInputPath = value
+    end,
+}, "MinInputPath")
+
+mainSecLeft1:Input({
+    Name = "Max Value Path",
+    Default = "",
+    Placeholder = "Maximum price (e.g. 50000)",
+    AcceptedCharacters = "Numeric",
+    Callback = function(value)
+        MaxInputPath = value
+    end,
+}, "MaxInputPath")
+
 mainSecLeft1:Toggle({
     Name = "Auto Buy Animals",
     Default = false,
     Callback = function(state)
-        local animalOverhead = GetAnimals()
+        AutoBuyEnabled = state
+        local player = game.Players.LocalPlayer
+
+        if state then
+            if not MinInputPath or not MaxInputPath then
+                print("Please set both Min and Max Value Paths before enabling Auto Buy Animals.")
+                AutoBuyEnabled = false
+                return
+            end
+
+            task.spawn(function()
+                while AutoBuyEnabled do
+                    local humanoidRootPart = Helpers.getHumanoidRoot(player)
+                    if not humanoidRootPart then
+                        task.wait(1)
+                        continue
+                    end
+
+                    local AnimalOverheads = GetAnimals()
+                    for _, animalData in ipairs(AnimalOverheads) do
+                        local animalObj = animalData.Object
+                        local animalPrice = animalData.Price
+
+                        if not animalObj or not animalPrice then
+                            continue
+                        end
+
+                        local minPrice = tonumber(MinInputPath)
+                        local maxPrice = tonumber(MaxInputPath)
+
+                        if animalPrice < minPrice then
+                            print(string.format("Skipping %s: Price %d is below min (%d)", animalObj.Name, animalPrice, minPrice))
+                            continue
+                        elseif animalPrice > maxPrice then
+                            print(string.format("Skipping %s: Price %d is above max (%d)", animalObj.Name, animalPrice, maxPrice))
+                            continue
+                        end
+
+                        local proximityPrompt = Helpers.safeFind(animalObj, {"Part", "PromptAttachment", "ProximityPrompt"})
+                        local targetPart = animalObj:FindFirstChild("Part") or animalObj.PrimaryPart
+                        if proximityPrompt and targetPart then
+                            humanoidRootPart.CFrame = targetPart.CFrame + Vector3.new(0, 5, 0)
+                            task.wait(0.5)
+                            pcall(fireproximityprompt, proximityPrompt)
+                            print("🛒 Bought:", animalObj.Name, "for", animalPrice)
+                        end
+                    end
+                    task.wait(2)
+                end
+            end)
+        else
+            AutoBuyEnabled = false
+        end
     end,
-})
+}, "AutoBuyAnimals")
+
 -----------------------------------------------------------
 -- SETTING TAB
 -----------------------------------------------------------
+local keyBind = Enum.KeyCode.K
+
 settingSec2:Keybind({
 	Name = "Set Key Bind",
 	onBinded = function(bind)
-		Menu.system.keyBind = bind or Enum.KeyCode.K
+		keyBind = bind or Enum.KeyCode.K
 		Window:Notify({
 			Title = "Pizza Hub",
-			Description = "Rebinded Reset Key Bind to " .. tostring(Menu.system.keyBind),
+			Description = "Rebinded Reset Key Bind to " .. tostring(keyBind),
 			Lifetime = 3
 		})
 	end,
@@ -128,7 +206,7 @@ end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
-	if input.KeyCode == Menu.system.keyBind then
+	if input.KeyCode == keyBind then
 		menuVisible = not menuVisible
 		pcall(function() Window:SetState(menuVisible) end)
 	end
