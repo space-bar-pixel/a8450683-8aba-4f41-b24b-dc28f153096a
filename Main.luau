@@ -33,6 +33,10 @@ local Helpers = loadRemote("https://raw.githubusercontent.com/space-bar-pixel/a8
 if not Helpers then error("Failed to load Helpers") end
 _logLoaded("Helpers", Helpers)
 
+local Movement = loadRemote("https://raw.githubusercontent.com/space-bar-pixel/a8450683-8aba-4f41-b24b-dc28f153096a/main/module/Movement.luau")
+if not Movement then error("Failed to load Helpers") end
+_logLoaded("Helpers", Movement)
+
 local Window = MacLib:Window({
 	Title = "Pizza Hub",
 	Subtitle = "Free | V0.1",
@@ -63,103 +67,118 @@ local UserInputService = game:GetService("UserInputService")
 local humanoidRootPart = nil
 local menuVisible = true
 
+local function Teleport(animalObj)
+	if not animalObj then return false end
+	local targetPart = animalObj:FindFirstChild("Part") or animalObj.PrimaryPart
+	if not targetPart then return false, "no target part" end
+
+	local hrp = Helpers.getHumanoidRoot(player)
+	if not hrp then return false, "no hrp" end
+
+	local targetCF = targetPart.CFrame + Vector3.new(0, 5, 0)
+
+	local ok, err = Movement.simulateWalkTo(player, targetCF.Position)
+	if not ok then
+		Movement.lerpTo(hrp, targetCF, {Duration = 0.8, Steps = 70})
+	end
+end
+
 local function GetAnimals()
-    local foundAnimal = {}
+	local foundAnimal = {}
 
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        local priceObj = Helpers.safeFind(obj, {"Part", "Info", "AnimalOverhead", "Price"})
-        if priceObj then
-            local text = priceObj.Text or priceObj.Value or ""
-            local numericPrice = Helpers.parsePrice(text)
-            table.insert(foundAnimal, {Object = obj, Price = numericPrice})
-            print(string.format("[%s] Price: %s → %d", obj.Name, text, numericPrice))
-        end
-    end
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		local priceObj = Helpers.safeFind(obj, {"Part", "Info", "AnimalOverhead", "Price"})
+		if priceObj then
+			local text = priceObj.Text or priceObj.Value or ""
+			local numericPrice = Helpers.parsePrice(text)
+			table.insert(foundAnimal, {Object = obj, Price = numericPrice})
+			print(string.format("[%s] Price: %s → %d", obj.Name, text, numericPrice))
+		end
+	end
 
-    return foundAnimal
+	return foundAnimal
 end
 
 local AutoBuyEnabled = false
 local MinInputPath, MaxInputPath = nil, nil
 
 mainSecLeft1:Input({
-    Name = "Min Value Path",
-    Default = "",
-    Placeholder = "Minimum price (e.g. 10000)",
-    AcceptedCharacters = "Numeric",
-    Callback = function(value)
-        MinInputPath = value
-    end,
+	Name = "Min Value Path",
+	Default = "",
+	Placeholder = "Minimum price (e.g. 10000)",
+	AcceptedCharacters = "Numeric",
+	Callback = function(value)
+		MinInputPath = value
+	end,
 }, "MinInputPath")
 
 mainSecLeft1:Input({
-    Name = "Max Value Path",
-    Default = "",
-    Placeholder = "Maximum price (e.g. 50000)",
-    AcceptedCharacters = "Numeric",
-    Callback = function(value)
-        MaxInputPath = value
-    end,
+	Name = "Max Value Path",
+	Default = "",
+	Placeholder = "Maximum price (e.g. 50000)",
+	AcceptedCharacters = "Numeric",
+	Callback = function(value)
+		MaxInputPath = value
+	end,
 }, "MaxInputPath")
 
 mainSecLeft1:Toggle({
-    Name = "Auto Buy Animals",
-    Default = false,
-    Callback = function(state)
-        AutoBuyEnabled = state
-        local player = game.Players.LocalPlayer
+	Name = "Auto Buy Animals",
+	Default = false,
+	Callback = function(state)
+		AutoBuyEnabled = state
+		local player = game.Players.LocalPlayer
 
-        if state then
-            if not MinInputPath or not MaxInputPath then
-                print("Please set both Min and Max Value Paths before enabling Auto Buy Animals.")
-                AutoBuyEnabled = false
-                return
-            end
+		if state then
+			if not MinInputPath or not MaxInputPath then
+				print("Please set both Min and Max Value Paths before enabling Auto Buy Animals.")
+				AutoBuyEnabled = false
+				return
+			end
 
-            task.spawn(function()
-                while AutoBuyEnabled do
-                    local humanoidRootPart = Helpers.getHumanoidRoot(player)
-                    if not humanoidRootPart then
-                        task.wait(1)
-                        continue
-                    end
+			task.spawn(function()
+				while AutoBuyEnabled do
+					local humanoidRootPart = Helpers.getHumanoidRoot(player)
+					if not humanoidRootPart then
+						task.wait(1)
+						continue
+					end
 
-                    local AnimalOverheads = GetAnimals()
-                    for _, animalData in ipairs(AnimalOverheads) do
-                        local animalObj = animalData.Object
-                        local animalPrice = animalData.Price
+					local animals = GetAnimals()
+					table.sort(animals, function(a,b) return a.Price > b.Price end)
+					
+					for _, a in ipairs(animals) do
+						if not AutoBuyEnabled then break end
+						local price = a.Price or 0
 
-                        if not animalObj or not animalPrice then
-                            continue
-                        end
+						local minPrice = tonumber(MinInputPath)
+						local maxPrice = tonumber(MaxInputPath)
 
-                        local minPrice = tonumber(MinInputPath)
-                        local maxPrice = tonumber(MaxInputPath)
-
-                        if animalPrice < minPrice then
-                            print(string.format("Skipping %s: Price %d is below min (%d)", animalObj.Name, animalPrice, minPrice))
-                            continue
-                        elseif animalPrice > maxPrice then
-                            print(string.format("Skipping %s: Price %d is above max (%d)", animalObj.Name, animalPrice, maxPrice))
-                            continue
-                        end
-
-                        local proximityPrompt = Helpers.safeFind(animalObj, {"Part", "PromptAttachment", "ProximityPrompt"})
-                        local targetPart = animalObj:FindFirstChild("Part") or animalObj.PrimaryPart
-                        if proximityPrompt and targetPart then
-                            humanoidRootPart.CFrame = targetPart.CFrame + Vector3.new(0, 5, 0)
-                            task.wait(0.5)
-                            pcall(fireproximityprompt, proximityPrompt)
-                            print("🛒 Bought:", animalObj.Name, "for", animalPrice)
-                        end
-                    end
-                    task.wait(2)
-                end
-            end)
-        else
-            AutoBuyEnabled = false
-        end
-    end,
+						if price >= minPrice and price <= maxPrice then
+							local proximityPrompt = Helpers.safeFind(a.Object, {"Part", "PromptAttachment", "ProximityPrompt"})
+							local targetPart = a.Object:FindFirstChild("Part") or a.Object.PrimaryPart
+							if proximityPrompt and targetPart then
+								local ok, err = Teleport(a.Object)
+								
+								if ok then
+									print("Bought:", a.Object.Name, price)
+								else
+									print("Could not buy:", a.Object.Name, "reason:", err)
+									task.wait(0.5)
+								end
+								task.wait(2)
+								pcall(fireproximityprompt, proximityPrompt)
+									print("🛒 Bought:", a.Object.Name, "for", price)
+							end
+						end
+					end
+					task.wait(2)
+				end
+			end)
+		else
+			AutoBuyEnabled = false
+		end
+	end,
 }, "AutoBuyAnimals")
 
 -----------------------------------------------------------
